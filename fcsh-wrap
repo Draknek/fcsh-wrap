@@ -1,0 +1,133 @@
+#!/usr/bin/python
+
+FCSH_COMMAND = 'fcsh'
+# FCSH_COMMAND = 'sh /path/to/fcsh'
+
+# This script is a wrapper for fcsh to give it a better user interface and to
+# allow you to run it from make. It runs as a daemon process which manages a
+# fcsh process.
+
+import glob
+import os
+import signal
+import sys
+import time
+import hashlib
+import subprocess
+
+
+# If true, supress the Recompile: and Reason: notes printed by fcsh.
+# WARNING: Heuristic is weak. May suppress overzealously.
+LESS_CHATTER = True
+
+timeout = 43200   # (43200 seconds == 12 hours)
+got_recompile_signal = False
+
+def main():
+
+   global got_recompile_signal
+   
+   # Cleanup command
+   if (sys.argv[1] == 'killall'):
+      killall()
+      sys.exit(0)
+
+   # Main logic
+   
+   md5sum = hashlib.md5('_'.join(sys.argv[1:])).hexdigest();
+   target = sys.argv[-1]
+   pidfile = '.FW.pid.%s' % (md5sum)
+   donefile = '.FW.done.%s' % (md5sum)
+   
+   pidfileexists = os.access(pidfile, os.F_OK)
+   
+   if (pidfileexists):
+      try:
+         pid = pid_from_file(pidfile)
+         os.kill(pid, signal.SIGUSR1)
+         print '*** fcsh-wrap process exists, using it'
+         while (not os.access(donefile, os.F_OK)):
+            time.sleep(0.2)
+         os.unlink(donefile)
+      except:
+         os.unlink(pidfile)
+         pidfileexists = False
+   
+   if (not pidfileexists):
+      print '*** starting fcsh child'
+      PIPE = subprocess.PIPE
+      process = subprocess.Popen(FCSH_COMMAND, shell=True, bufsize=1, stdin=PIPE, stdout=PIPE, close_fds=True)
+      (fcsh_in, fcsh_out) = (process.stdin, process.stdout)
+      dump(fcsh_out)
+      print '*** compiling %s' % (target)
+      fcsh_in.write(' '.join(['mxmlc'] + sys.argv[1:]) + '\n')
+      fcsh_in.flush()
+      dump(fcsh_out)
+      print '*** backgrounding'
+      if (os.fork() != 0):
+         os._exit(0)  # parent exits
+      open(pidfile, 'w').write('%d\n' % (os.getpid()))
+      print '*** setting up signal handlers'
+      signal.signal(signal.SIGTERM, signal_quit)
+      signal.signal(signal.SIGHUP, signal_quit)
+      signal.signal(signal.SIGUSR1, signal_recompile)
+      print '*** waiting for signals'
+      while True:
+         time.sleep(timeout) # is interrupted when we catch a signal
+         if (not got_recompile_signal):
+            # got either SIGTERM or sleep ended (we timed out); exit
+            break
+         print '*** recompiling %s' % (target)
+         got_recompile_signal = False
+         fcsh_in.write('compile 1\n')
+         fcsh_in.flush()
+         dump(fcsh_out)
+         open(donefile, 'w').close()
+      os.unlink(pidfile)
+      print '*** fcsh-wrap exiting'
+
+
+def dump(fp):
+   ignore_till_newline = False
+   chars = list()
+   while ''.join(chars) != '(fcsh) ':
+      if (len(chars) == 7):
+         if (LESS_CHATTER and ''.join(chars) in ('Reason:', 'Recompi')):
+            ignore_till_newline = True
+         c = chars.pop(0)
+         if (not ignore_till_newline):
+            sys.stdout.write(c)
+         if (c == '\n'):
+            ignore_till_newline = False
+      chars.append(fp.read(1))
+      assert (len(chars) <= 7)
+      
+
+def pid_from_file(filename):
+   return int(open(filename).read())
+
+
+def signal_recompile(signum, frame):
+   global got_recompile_signal
+   got_recompile_signal = True
+
+def signal_quit(signum, frame):
+   'Do nothing, but sleep() is ended.'
+   pass
+
+
+def killall():
+   for fn in glob.glob('.FW.pid.*'):
+      pid = pid_from_file(fn)
+      print '*** killing process %d' % (pid)
+      try:
+         os.kill(pid, signal.SIGTERM)
+      except:
+         print 'except process %d is already dead' % (pid)
+         print '*** deleting file %s' % (fn)
+         os.unlink(fn)
+
+
+if (__name__ == '__main__'):
+   main()
+
