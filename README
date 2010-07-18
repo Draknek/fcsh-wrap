@@ -1,4 +1,0 @@
-This script is a wrapper for fcsh to give it a better user interface and to
-allow you to run it from make. It runs as a daemon process which manages a
-fcsh process.
-
