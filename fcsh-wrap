@@ -45,39 +45,50 @@ def main():
    md5sum = hashlib.md5('_'.join(mxmlc_args)).hexdigest();
    pidfile = '.FW.pid.%s' % (md5sum)
    donefile = '.FW.done.%s' % (md5sum)
+   fifofile = '.FW.fifo.%s' % (md5sum)
    
    pidfileexists = os.access(pidfile, os.F_OK)
    
    if (pidfileexists):
       try:
+         fifo = open(fifofile, 'r')
          pid = pid_from_file(pidfile)
          os.kill(pid, signal.SIGUSR1)
          print '*** fcsh-wrap process exists, using it'
          while (not os.access(donefile, os.F_OK)):
             time.sleep(0.2)
+         status = dump(fifo)
          os.unlink(donefile)
+         os._exit(status)
       except:
          os.unlink(pidfile)
          pidfileexists = False
    
    if (not pidfileexists):
+      os.mkfifo(fifofile)
+
+      if (os.fork() != 0): # parent
+         fifo = open(fifofile, 'r')
+         dumpstartup(fifo)
+         status = dump(fifo)
+         os._exit(status)
+
+      # child
+      print "*** backgrounding"
+      fifo = open(fifofile, 'w')
       print '*** starting fcsh child'
-      PIPE = subprocess.PIPE
-      process = subprocess.Popen(FCSH_COMMAND, shell=True, bufsize=1, stdin=PIPE, stdout=PIPE, close_fds=True)
-      (fcsh_in, fcsh_out) = (process.stdin, process.stdout)
-      dumpstartup(fcsh_out)
+      process = subprocess.Popen(FCSH_COMMAND, shell=True, bufsize=1,
+                                 stdin=subprocess.PIPE, stdout=fifo,
+                                 stderr=subprocess.STDOUT, close_fds=True)
+      (fcsh_in, fcsh_out) = (process.stdin, fifo)
       
       compatibility_arg = '-compatibility-version=%i.0.0' % flex_version
       
       if (compatibility_arg in mxmlc_args):
-         mxmlc_args.remove(compatibility_arg);
+         mxmlc_args.remove(compatibility_arg)
       
       fcsh_in.write('mxmlc ' + ' '.join(mxmlc_args) + '\n')
       fcsh_in.flush()
-      dump(fcsh_out)
-      print '*** backgrounding'
-      if (os.fork() != 0):
-         os._exit(0)  # parent exits
       open(pidfile, 'w').write('%d\n' % (os.getpid()))
       print '*** setting up signal handlers'
       signal.signal(signal.SIGTERM, signal_quit)
@@ -92,9 +103,9 @@ def main():
          got_recompile_signal = False
          fcsh_in.write('compile 1\n')
          fcsh_in.flush()
-         dump(fcsh_out)
          open(donefile, 'w').close()
       os.unlink(pidfile)
+      os.unlink(fifofile)
       print '*** fcsh-wrap exiting'
 
 
@@ -124,11 +135,14 @@ def dumpstartup (fp):
 
 def dump(fp):
    ignore_till_newline = False
+   failed = False
    chars = list()
    while ''.join(chars) != '(fcsh) ':
       if (len(chars) == 7):
          if (LESS_CHATTER and ''.join(chars) in ('Reason:', 'Recompi')):
             ignore_till_newline = True
+         if ''.join(chars) == 'Error: ':
+            failed = True
          c = chars.pop(0)
          if (not ignore_till_newline):
             sys.stdout.write(c)
@@ -136,7 +150,8 @@ def dump(fp):
             ignore_till_newline = False
       chars.append(fp.read(1))
       assert (len(chars) <= 7)
-      
+   return (1 if failed else 0)
+
 
 def pid_from_file(filename):
    return int(open(filename).read())
@@ -161,6 +176,9 @@ def killall():
          print 'except process %d is already dead' % (pid)
          print '*** deleting file %s' % (fn)
          os.unlink(fn)
+   for fn in glob.glob('.FW.fifo.*'):
+      print '*** deleting file %s' % (fn)
+      os.unlink(fn)
 
 
 if (__name__ == '__main__'):
