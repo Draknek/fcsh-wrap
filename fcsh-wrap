@@ -1,8 +1,5 @@
 #!/usr/bin/python
 
-FCSH_COMMAND = 'fcsh'
-# FCSH_COMMAND = 'sh /path/to/fcsh'
-
 # This script is a wrapper for fcsh to give it a better user interface and to
 # allow you to run it from make. It runs as a daemon process which manages a
 # fcsh process.
@@ -14,6 +11,8 @@ import sys
 import time
 import hashlib
 import subprocess
+
+FCSH_COMMAND = os.environ.get('FCSH') or 'fcsh'
 
 
 # If true, supress the Recompile: and Reason: notes printed by fcsh.

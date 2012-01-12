@@ -13,7 +13,7 @@ USAGE
 =====
 
 1. Download the fcsh-wrap script from [http://github.com/Draknek/fcsh-wrap/raw/master/fcsh-wrap](http://github.com/Draknek/fcsh-wrap/raw/master/fcsh-wrap)
-2. Edit the file to point to your copy of fcsh (if it's not in your $PATH)
+2. Set the FCSH environment variable to point to your copy of fcsh (if it's not in your $PATH)
 3. Run fcsh-wrap instead of mxmlc, with all the same arguments.
 
 
