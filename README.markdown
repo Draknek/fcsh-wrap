@@ -27,8 +27,7 @@ REQUIREMENTS
 KNOWN ISSUES
 ============
 
-* Output goes to the terminal that you start it running on, even if you’ve closed that window.
-* Almost certainly won’t work under Windows, but if you’re running Windows you should probably be using FlashDevelop anyway.
+* Doesn't won’t work under Windows, but if you’re running Windows you should probably be using FlashDevelop anyway.
 * Leaves .FW.[MD5SUM] files in the working directory.
 
 
