@@ -173,11 +173,12 @@ def killall():
          os.kill(pid, signal.SIGTERM)
       except:
          print 'except process %d is already dead' % (pid)
-         print '*** deleting file %s' % (fn)
          os.unlink(fn)
    for fn in glob.glob('.FW.fifo.*'):
-      print '*** deleting file %s' % (fn)
-      os.unlink(fn)
+      try:
+         os.unlink(fn)
+      except:
+         pass
 
 
 if (__name__ == '__main__'):
