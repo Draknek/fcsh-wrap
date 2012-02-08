@@ -50,9 +50,10 @@ def main():
    
    if (pidfileexists):
       try:
-         os.kill(pid, signal.SIGUSR2) # Does nothing, but errors if pid isn't running
-         fifo = open(fifofile, 'r')
          pid = pid_from_file(pidfile)
+         if (not os.access('/proc/%d' % pid, os.F_OK)):
+            raise Exception("Process not running any more")
+         fifo = open(fifofile, 'r')
          os.kill(pid, signal.SIGUSR1)
          print '*** fcsh-wrap process exists, using it'
          while (not os.access(donefile, os.F_OK)):
