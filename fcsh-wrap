@@ -50,6 +50,7 @@ def main():
    
    if (pidfileexists):
       try:
+         os.kill(pid, signal.SIGUSR2) # Does nothing, but errors if pid isn't running
          fifo = open(fifofile, 'r')
          pid = pid_from_file(pidfile)
          os.kill(pid, signal.SIGUSR1)
@@ -61,6 +62,7 @@ def main():
          os._exit(status)
       except:
          os.unlink(pidfile)
+         os.unlink(fifofile)
          pidfileexists = False
    
    if (not pidfileexists):
